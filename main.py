@@ -4,6 +4,7 @@ import requests
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.filters import create
+from datetime import datetime
 
 API_ID = 22222258
 API_HASH = "60ea076de059a85ccfd68516df08b951"
@@ -45,6 +46,7 @@ async def show_commands(_, cb: CallbackQuery):
         [InlineKeyboardButton("🔑 Set Token", callback_data="set_token")],
         [InlineKeyboardButton("🔀 Switch Token", callback_data="switch_token")],
         [InlineKeyboardButton("📚 My Repos", callback_data="list_repos")],
+        [InlineKeyboardButton("➕ Create Repo", callback_data="create_repo")],
         [InlineKeyboardButton("📤 Upload File", callback_data="upload_file")],
         [InlineKeyboardButton("🔎 Search User", callback_data="search_user")],
         [InlineKeyboardButton("🏓 Ping", callback_data="ping")]
@@ -59,7 +61,7 @@ async def show_commands(_, cb: CallbackQuery):
 
 @app.on_callback_query(filters.regex("^ping$"))
 async def ping(_, cb: CallbackQuery):
-    await cb.answer("✅ Pong!", show_alert=True)
+    await cb.answer("✅ Pong! Fast.", show_alert=True)
 
 @app.on_callback_query(filters.regex("^set_token$"))
 async def ask_token(_, cb: CallbackQuery):
@@ -129,6 +131,23 @@ async def search_user_cb(_, cb: CallbackQuery):
         repos = res.json()
         buttons = [InlineKeyboardButton(repo['name'], url=f"https://github.com/{username}/{repo['name']}/archive/refs/heads/main.zip") for repo in repos]
         await msg.reply(f"📁 Repositories by `{username}`:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
+
+@app.on_callback_query(filters.regex("^create_repo$"))
+async def create_repo_cb(_, cb: CallbackQuery):
+    await cb.message.edit("📦 Send the name of the repository to create:")
+
+    @app.on_message(filters.private & filters.text & filters.user(cb.from_user.id))
+    async def receive_repo_name(_, msg: Message):
+        repo_name = msg.text.strip()
+        token = user_tokens.get(str(msg.from_user.id), {}).get("active")
+        if not token:
+            return await msg.reply("❌ No token found.")
+        headers = {"Authorization": f"token {token}"}
+        res = requests.post("https://api.github.com/user/repos", headers=headers, json={"name": repo_name})
+        if res.status_code == 201:
+            await msg.reply(f"✅ Repo `{repo_name}` created!")
+        else:
+            await msg.reply("❌ Failed to create repo.")
 
 print("✅ SPILUX GITHUB BOT ONLINE")
 app.run()
