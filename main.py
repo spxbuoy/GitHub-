@@ -3,10 +3,10 @@ import json
 import base64
 import requests
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
 from pyrogram.filters import create
 
-# Your credentials
+# Credentials
 API_ID = 22222258
 API_HASH = "60ea076de059a85ccfd68516df08b951"
 BOT_TOKEN = "7812101523:AAHk0_gwisGRD5ThBRtApTcaFT6uVt3cq_w"
@@ -39,180 +39,120 @@ not_banned = create(check_not_banned)
 # Pyrogram client
 app = Client("github_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+# Utility to get active token
+def get_active_token(user_id):
+    tokens = user_tokens.get(str(user_id), {})
+    active = tokens.get("active")
+    return active if active else (next(iter(t for t in tokens if t != "active"), None))
+
 # /start
 @app.on_message(filters.command("start") & not_banned)
 async def start(_, msg: Message):
     await msg.reply(
-        "**👋 Welcome to GitHub Manager Bot!**\n\n"
-        "Commands:\n"
-        "• `/settoken <token>` – Link your GitHub\n"
-        "• `/repos` – List your repositories\n"
-        "• `/create <name>` – Create repo\n"
-        "• `/delete <name>` – Delete repo\n"
-        "• `/createas <user_id> <repo>` – Admin only\n"
-        "• `/ban <user_id>` – Admin only\n"
-        "• `/unban <user_id>` – Admin only\n"
-        "• `/users` – See all users\n"
-        "• Send any file to upload to repo\n",
+        "**👋 Welcome to GitHub Manager Bot!**",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📂 Commands", callback_data="help")]
+            [InlineKeyboardButton("📌 Set Token", callback_data="settoken")],
+            [InlineKeyboardButton("🔄 Switch Token", callback_data="switch")],
+            [InlineKeyboardButton("📦 Create Repo", callback_data="create")],
+            [InlineKeyboardButton("🗑️ Delete Repo", callback_data="delete")],
+            [InlineKeyboardButton("🧾 List Repos", callback_data="repos")]
         ])
     )
 
-# Button handler
+# Handle button interactions
 @app.on_callback_query()
-async def button_handler(_, cb):
-    if cb.data == "help":
-        await cb.message.edit(
-            "**📘 Commands Help**\n\n"
-            "`/settoken` - Link GitHub token\n"
-            "`/repos` - List repos\n"
-            "`/create` - Create repo\n"
-            "`/delete` - Delete repo\n"
-            "`/createas` - Admin create repo\n"
-            "`/ban` / `/unban` - Admin only\n"
-            "`/users` - Admin only",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Back", callback_data="back")]
-            ])
-        )
-    elif cb.data == "back":
-        await start(_, cb.message)
+async def handle_buttons(_, cb):
+    user_id = str(cb.from_user.id)
 
-# /settoken
-@app.on_message(filters.command("settoken") & not_banned)
-async def set_token(_, msg: Message):
-    if len(msg.command) < 2:
-        return await msg.reply("Usage: `/settoken <your_github_token>`")
-    user_tokens[str(msg.from_user.id)] = msg.command[1]
-    save_data()
-    await msg.reply("✅ GitHub token saved!")
+    if cb.data == "settoken":
+        await cb.message.reply("🔑 Send your GitHub token:", reply_markup=ForceReply())
 
-# /repos
-@app.on_message(filters.command("repos") & not_banned)
-async def list_repos(_, msg: Message):
-    token = user_tokens.get(str(msg.from_user.id))
-    if not token:
-        return await msg.reply("❌ Use `/settoken` first.")
-    headers = {"Authorization": f"token {token}"}
-    res = requests.get("https://api.github.com/user/repos", headers=headers)
-    if res.status_code != 200:
-        return await msg.reply("❌ Failed to fetch repositories.")
-    repos = [r["name"] for r in res.json()]
-    await msg.reply("📦 Your Repositories:\n" + "\n".join(f"• `{r}`" for r in repos) or "No repos found.")
+    elif cb.data == "create":
+        await cb.message.reply("🆕 Send the name of the repository to create:", reply_markup=ForceReply())
 
-# /create
-@app.on_message(filters.command("create") & not_banned)
-async def create_repo(_, msg: Message):
-    if len(msg.command) < 2:
-        return await msg.reply("Usage: `/create repo_name`")
-    token = user_tokens.get(str(msg.from_user.id))
-    if not token:
-        return await msg.reply("❌ Use `/settoken` first.")
-    headers = {"Authorization": f"token {token}"}
-    data = {"name": msg.command[1], "auto_init": True}
-    res = requests.post("https://api.github.com/user/repos", json=data, headers=headers)
-    if res.status_code == 201:
-        await msg.reply(f"✅ Repository `{msg.command[1]}` created!")
-    else:
-        await msg.reply("❌ Failed to create repository.")
+    elif cb.data == "delete":
+        await cb.message.reply("🗑️ Send the name of the repository to delete:", reply_markup=ForceReply())
 
-# /delete
-@app.on_message(filters.command("delete") & not_banned)
-async def delete_repo(_, msg: Message):
-    if len(msg.command) < 2:
-        return await msg.reply("Usage: `/delete repo_name`")
-    token = user_tokens.get(str(msg.from_user.id))
-    if not token:
-        return await msg.reply("❌ Use `/settoken` first.")
-    headers = {"Authorization": f"token {token}"}
-    username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
-    res = requests.delete(f"https://api.github.com/repos/{username}/{msg.command[1]}", headers=headers)
-    if res.status_code == 204:
-        await msg.reply("🗑️ Repository deleted.")
-    else:
-        await msg.reply("❌ Failed to delete repository.")
+    elif cb.data == "switch":
+        tokens = user_tokens.get(user_id, {})
+        if not tokens:
+            return await cb.message.reply("❌ No tokens saved yet.")
+        buttons = [InlineKeyboardButton(t[:8] + "...", callback_data=f"switch:{t}") for t in tokens if t != "active"]
+        await cb.message.reply("🔄 Choose a token:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
 
-# /createas (admin)
-@app.on_message(filters.command("createas") & filters.user(ADMINS))
-async def create_as(_, msg: Message):
-    if len(msg.command) < 3:
-        return await msg.reply("Usage: `/createas user_id repo_name`")
-    uid, repo = msg.command[1], msg.command[2]
-    token = user_tokens.get(str(uid))
-    if not token:
-        return await msg.reply("❌ User has no token.")
-    headers = {"Authorization": f"token {token}"}
-    data = {"name": repo, "auto_init": True}
-    res = requests.post("https://api.github.com/user/repos", json=data, headers=headers)
-    if res.status_code == 201:
-        await msg.reply(f"✅ Created `{repo}` for user `{uid}`.")
-    else:
-        await msg.reply("❌ Failed to create repo.")
+    elif cb.data == "repos":
+        token = get_active_token(cb.from_user.id)
+        if not token:
+            return await cb.message.reply("❌ Set your token first.")
+        headers = {"Authorization": f"token {token}"}
+        res = requests.get("https://api.github.com/user/repos", headers=headers)
+        if res.status_code != 200:
+            return await cb.message.reply("❌ Failed to fetch repos.")
+        repos = res.json()
+        if not repos:
+            return await cb.message.reply("📂 No repositories found.")
+        buttons = [InlineKeyboardButton(r["name"], callback_data=f"dl:{r['name']}") for r in repos]
+        await cb.message.reply("📦 Your repositories:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
 
-# /ban (admin)
-@app.on_message(filters.command("ban") & filters.user(ADMINS))
-async def ban_user(_, msg: Message):
-    if len(msg.command) < 2:
-        return await msg.reply("Usage: `/ban user_id`")
-    user_id = int(msg.command[1])
-    banned_users.add(user_id)
-    save_data()
-    await msg.reply(f"🚫 Banned user `{user_id}`.")
+    elif cb.data.startswith("switch:"):
+        token = cb.data.split(":", 1)[1]
+        user_tokens[user_id]["active"] = token
+        save_data()
+        await cb.message.edit("✅ Switched token.")
 
-# /unban (admin)
-@app.on_message(filters.command("unban") & filters.user(ADMINS))
-async def unban_user(_, msg: Message):
-    if len(msg.command) < 2:
-        return await msg.reply("Usage: `/unban user_id`")
-    user_id = int(msg.command[1])
-    banned_users.discard(user_id)
-    save_data()
-    await msg.reply(f"✅ Unbanned user `{user_id}`.")
+    elif cb.data.startswith("dl:"):
+        repo_name = cb.data.split(":", 1)[1]
+        token = get_active_token(cb.from_user.id)
+        headers = {"Authorization": f"token {token}"}
+        username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
+        zip_url = f"https://github.com/{username}/{repo_name}/archive/refs/heads/main.zip"
+        try:
+            file = requests.get(zip_url)
+            with open("repo.zip", "wb") as f:
+                f.write(file.content)
+            await cb.message.reply_document("repo.zip", caption=f"📦 `{repo_name}` repo ZIP")
+            os.remove("repo.zip")
+        except:
+            await cb.message.reply("❌ Could not download repo.")
 
-# /users (admin)
-@app.on_message(filters.command("users") & filters.user(ADMINS))
-async def list_users(_, msg: Message):
-    if not user_tokens:
-        return await msg.reply("No users have set a token yet.")
-    text = "**👥 Users with tokens:**\n"
-    for uid in user_tokens:
-        text += f"• `{uid}`\n"
-    await msg.reply(text)
+# Listen for replies from ForceReply
+@app.on_message(filters.reply & not_banned)
+async def handle_reply(_, msg: Message):
+    user_id = str(msg.from_user.id)
+    previous = msg.reply_to_message.text
 
-# File upload
-@app.on_message(filters.document & not_banned)
-async def upload_file(_, msg: Message):
-    token = user_tokens.get(str(msg.from_user.id))
-    if not token:
-        return await msg.reply("❌ Use `/settoken` first.")
-    file_path = await msg.download()
-    await msg.reply("📥 Now send: `repo_name/path/to/filename.ext`")
+    if "token" in previous.lower():
+        token = msg.text.strip()
+        user_tokens.setdefault(user_id, {})
+        user_tokens[user_id][token] = {}
+        user_tokens[user_id]["active"] = token
+        save_data()
+        await msg.reply("✅ Token saved and activated.")
 
-    next_msg = await app.listen(msg.chat.id)
-    target_path = next_msg.text.strip()
-    repo_name, file_in_repo = target_path.split("/", 1)
+    elif "create" in previous.lower():
+        token = get_active_token(user_id)
+        if not token:
+            return await msg.reply("❌ Set your token first.")
+        headers = {"Authorization": f"token {token}"}
+        data = {"name": msg.text.strip(), "auto_init": True}
+        res = requests.post("https://api.github.com/user/repos", json=data, headers=headers)
+        if res.status_code == 201:
+            await msg.reply("✅ Repository created!")
+        else:
+            await msg.reply("❌ Failed to create repository.")
 
-    with open(file_path, "rb") as f:
-        content = f.read()
-    content_b64 = base64.b64encode(content).decode()
-
-    headers = {
-        "Authorization": f"token {token}",
-        "Content-Type": "application/json"
-    }
-    username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
-    url = f"https://api.github.com/repos/{username}/{repo_name}/contents/{file_in_repo}"
-    data = {
-        "message": f"Upload {file_in_repo}",
-        "content": content_b64
-    }
-    res = requests.put(url, json=data, headers=headers)
-    os.remove(file_path)
-    if res.status_code in [200, 201]:
-        await msg.reply("✅ File uploaded.")
-    else:
-        await msg.reply("❌ Failed to upload file.")
+    elif "delete" in previous.lower():
+        token = get_active_token(user_id)
+        if not token:
+            return await msg.reply("❌ Set your token first.")
+        headers = {"Authorization": f"token {token}"}
+        username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
+        repo = msg.text.strip()
+        res = requests.delete(f"https://api.github.com/repos/{username}/{repo}", headers=headers)
+        if res.status_code == 204:
+            await msg.reply("🗑️ Repository deleted.")
+        else:
+            await msg.reply("❌ Failed to delete repository.")
 
 # Start bot
 print("✅ SPILUX GITHUB BOT ONLINE")
