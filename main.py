@@ -89,6 +89,28 @@ async def set_token(_, msg: Message):
     save_data()
     await msg.reply("✅ GitHub token saved!")
 
+# Admin: View user repos
+@app.on_message(filters.command("viewrepos") & filters.user(ADMINS))
+async def admin_view_user_repos(_, msg: Message):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage: `/viewrepos user_id`")
+    
+    user_id = msg.command[1]
+    token = user_tokens.get(str(user_id))
+    
+    if not token:
+        return await msg.reply("❌ That user has not set a token.")
+
+    headers = {"Authorization": f"token {token}"}
+    res = requests.get("https://api.github.com/user/repos", headers=headers)
+    
+    if res.status_code != 200:
+        return await msg.reply("❌ Failed to fetch repos for user.")
+    
+    repos = [r["name"] for r in res.json()]
+    await msg.reply(f"📦 Repos for `{user_id}`:\n" + "\n".join(f"• `{r}`" for r in repos) or "No repos.")
+    
+
 # /repos
 @app.on_message(filters.command("repos"))
 async def list_repos(_, msg: Message):
