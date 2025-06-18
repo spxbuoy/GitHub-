@@ -7,7 +7,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 API_ID = 123456  # Replace with your API ID
 API_HASH = "your_api_hash"  # Replace with your API Hash
-BOT_TOKEN = "your_bot_token"  # Replace with your Bot Token
+BOT_TOKEN = "7812101523:AAHk0_gwisGRD5ThBRtApTcaFT6uVt3cq_w"  # Replace with your Bot Token
 
 ADMINS = [123456789]  # Replace with your Telegram user ID(s)
 
