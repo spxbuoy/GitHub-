@@ -31,18 +31,6 @@ data = load_data()
 user_tokens = data.get("tokens", {})
 banned_users = set(data.get("banned", []))
 
-# Custom Filter: Not Banned
-class NotBanned(Filter):
-    def __init__(self, banned):
-        self.banned = banned
-
-    async def __call__(self, _, __, msg):
-        return msg.from_user.id not in self.banned
-
-not_banned = NotBanned(banned_users)
-
-app = Client("github_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
 # Start
 @app.on_message(filters.command("start") & not_banned)
 async def start(_, msg: Message):
