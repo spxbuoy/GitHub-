@@ -6,7 +6,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.filters import create
 
-# Credentials
+# Your credentials
 API_ID = 22222258
 API_HASH = "60ea076de059a85ccfd68516df08b951"
 BOT_TOKEN = "7812101523:AAHk0_gwisGRD5ThBRtApTcaFT6uVt3cq_w"
@@ -45,11 +45,15 @@ async def start(_, msg: Message):
     await msg.reply(
         "**👋 Welcome to GitHub Manager Bot!**\n\n"
         "Commands:\n"
-        "• Connect your GitHub account\n"
-        "• Browse and manage repositories\n"
-        "• Create and delete repositories\n"
-        "• Upload files and manage repository contents\n"
-        "• View issues and pull requests",
+        "• `/settoken <token>` – Link your GitHub\n"
+        "• `/repos` – List your repositories\n"
+        "• `/create <name>` – Create repo\n"
+        "• `/delete <name>` – Delete repo\n"
+        "• `/createas <user_id> <repo>` – Admin only\n"
+        "• `/ban <user_id>` – Admin only\n"
+        "• `/unban <user_id>` – Admin only\n"
+        "• `/users` – See all users\n"
+        "• Send any file to upload to repo\n",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📂 Commands", callback_data="help")]
         ])
@@ -60,15 +64,14 @@ async def start(_, msg: Message):
 async def button_handler(_, cb):
     if cb.data == "help":
         await cb.message.edit(
-            "**📘 𝐂𝐨𝐦𝐦𝐚𝐧𝐝𝐬 𝐇𝐞𝐥𝐩**\n\n"
+            "**📘 Commands Help**\n\n"
             "`/settoken` - Link GitHub token\n"
             "`/repos` - List repos\n"
             "`/create` - Create repo\n"
             "`/delete` - Delete repo\n"
             "`/createas` - Admin create repo\n"
             "`/ban` / `/unban` - Admin only\n"
-            "`/users` - Admin only\n\n"
-            "bᎾᏆ bᎽ: @SpiluxX",
+            "`/users` - Admin only",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Back", callback_data="back")]
             ])
@@ -176,28 +179,6 @@ async def list_users(_, msg: Message):
     for uid in user_tokens:
         text += f"• `{uid}`\n"
     await msg.reply(text)
-
-# /download repo
-@app.on_message(filters.command("download") & not_banned)
-async def download_repo(_, msg: Message):
-    if len(msg.command) < 2:
-        return await msg.reply("Usage: `/download repo_name`")
-    token = user_tokens.get(str(msg.from_user.id))
-    if not token:
-        return await msg.reply("❌ Use `/settoken` first.")
-    
-    headers = {"Authorization": f"token {token}"}
-    username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
-    zip_url = f"https://github.com/{username}/{msg.command[1]}/archive/refs/heads/main.zip"
-    
-    try:
-        file = requests.get(zip_url)
-        with open("repo.zip", "wb") as f:
-            f.write(file.content)
-        await msg.reply_document("repo.zip", caption="📦 Here's your repository.")
-        os.remove("repo.zip")
-    except:
-        await msg.reply("❌ Could not download repo.")
 
 # File upload
 @app.on_message(filters.document & not_banned)
