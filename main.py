@@ -45,7 +45,6 @@ async def start(_, msg: Message):
     await msg.reply(
         "**👋 Welcome to GitHub Manager Bot!**\n\n"
         "Commands:\n"
-        Features:
 • Connect your GitHub account
 • Browse and manage repositories
 • Create and delete repositories
