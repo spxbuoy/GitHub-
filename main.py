@@ -5,11 +5,11 @@ import requests
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-API_ID = 123456  # Replace with your API ID
-API_HASH = "your_api_hash"  # Replace with your API Hash
+API_ID = 22222258  # Replace with your API ID
+API_HASH = "60ea076de059a85ccfd68516df08b951"  # Replace with your API Hash
 BOT_TOKEN = "7812101523:AAHk0_gwisGRD5ThBRtApTcaFT6uVt3cq_w"  # Replace with your Bot Token
 
-ADMINS = [123456789]  # Replace with your Telegram user ID(s)
+ADMINS = [7213451334]  # Replace with your Telegram user ID(s)
 
 DATA_FILE = "data.json"
 
