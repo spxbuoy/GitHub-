@@ -210,6 +210,25 @@ async def upload_file(_, msg: Message):
     else:
         await msg.reply("❌ Failed to upload file.")
 
+# Admin-only: List users who set tokens
+@app.on_message(filters.command("users") & filters.user(ADMINS))
+async def list_users(_, msg: Message):
+    text = "**👥 Users who connected GitHub:**\n"
+    if not user_tokens:
+        return await msg.reply("No users have set a token yet.")
+    
+    for user_id in user_tokens:
+        try:
+            user = await app.get_users(int(user_id))
+            username = user.username or "No username"
+            name = user.first_name
+            text += f"• `{user_id}` - [{name}](tg://user?id={user_id}) (`{username}`)\n"
+        except Exception:
+            text += f"• `{user_id}` - Unknown user\n"
+    
+    await msg.reply(text)
+    
+
 # /ban & /unban
 @app.on_message(filters.command("ban") & filters.user(ADMINS))
 async def ban_user(_, msg: Message):
