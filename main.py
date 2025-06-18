@@ -160,6 +160,28 @@ async def ban_user(_, msg: Message):
     save_data()
     await msg.reply(f"🚫 Banned user `{user_id}`.")
 
+@app.on_message(filters.command("download") & not_banned)
+async def download_repo(_, msg: Message):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage: `/download repo_name`")
+    token = user_tokens.get(str(msg.from_user.id))
+    if not token:
+        return await msg.reply("❌ Use `/settoken` first.")
+    
+    headers = {"Authorization": f"token {token}"}
+    username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
+    zip_url = f"https://github.com/{username}/{msg.command[1]}/archive/refs/heads/main.zip"
+    
+    try:
+        file = requests.get(zip_url)
+        with open("repo.zip", "wb") as f:
+            f.write(file.content)
+        await msg.reply_document("repo.zip", caption="📦 Here's your repository.")
+        os.remove("repo.zip")
+    except:
+        await msg.reply("❌ Could not download repo.")
+        
+
 # /unban (admin)
 @app.on_message(filters.command("unban") & filters.user(ADMINS))
 async def unban_user(_, msg: Message):
