@@ -51,10 +51,9 @@ async def start(_, msg: Message):
 "• Upload files and manage repository contents"
 "• View issues and pull requests"
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📂 Commands", callback_data="help")]
-        ])
-    )
-
+        [InlineKeyboardButton("📂 Commands", callback_data="help")]
+    ])
+)
 # Button handler
 @app.on_callback_query()
 async def button_handler(_, cb):
