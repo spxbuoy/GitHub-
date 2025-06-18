@@ -4,7 +4,7 @@ import base64
 import requests
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.filters import Filter
+from pyrogram.filters import create
 
 # Your credentials
 API_ID = 22222258
@@ -15,14 +15,13 @@ ADMINS = [7213451334]
 # Data file
 DATA_FILE = "data.json"
 
-# Load data
+# Load/save data
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {"tokens": {}, "banned": []}
     with open(DATA_FILE, "r") as f:
         return json.load(f)
 
-# Save data
 def save_data():
     with open(DATA_FILE, "w") as f:
         json.dump({"tokens": user_tokens, "banned": list(banned_users)}, f)
@@ -31,7 +30,16 @@ data = load_data()
 user_tokens = data.get("tokens", {})
 banned_users = set(data.get("banned", []))
 
-# Start
+# Not banned filter
+def check_not_banned(_, __, msg):
+    return msg.from_user.id not in banned_users
+
+not_banned = create(check_not_banned)
+
+# Pyrogram client
+app = Client("github_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+# /start
 @app.on_message(filters.command("start") & not_banned)
 async def start(_, msg: Message):
     await msg.reply(
@@ -44,6 +52,7 @@ async def start(_, msg: Message):
         "• `/createas <user_id> <repo>` – Admin only\n"
         "• `/ban <user_id>` – Admin only\n"
         "• `/unban <user_id>` – Admin only\n"
+        "• `/users` – See all users\n"
         "• Send any file to upload to repo\n",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📂 Commands", callback_data="help")]
@@ -60,8 +69,9 @@ async def button_handler(_, cb):
             "`/repos` - List repos\n"
             "`/create` - Create repo\n"
             "`/delete` - Delete repo\n"
-            "`/createas` - Admin repo creation\n"
-            "`/ban` / `/unban` - Admin only",
+            "`/createas` - Admin create repo\n"
+            "`/ban` / `/unban` - Admin only\n"
+            "`/users` - Admin only",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Back", callback_data="back")]
             ])
@@ -69,16 +79,16 @@ async def button_handler(_, cb):
     elif cb.data == "back":
         await start(_, cb.message)
 
-# Set token
+# /settoken
 @app.on_message(filters.command("settoken") & not_banned)
 async def set_token(_, msg: Message):
     if len(msg.command) < 2:
-        return await msg.reply("Usage: `/settoken YOUR_GITHUB_TOKEN`")
+        return await msg.reply("Usage: `/settoken <your_github_token>`")
     user_tokens[str(msg.from_user.id)] = msg.command[1]
     save_data()
     await msg.reply("✅ GitHub token saved!")
 
-# List repos
+# /repos
 @app.on_message(filters.command("repos") & not_banned)
 async def list_repos(_, msg: Message):
     token = user_tokens.get(str(msg.from_user.id))
@@ -91,7 +101,7 @@ async def list_repos(_, msg: Message):
     repos = [r["name"] for r in res.json()]
     await msg.reply("📦 Your Repositories:\n" + "\n".join(f"• `{r}`" for r in repos) or "No repos found.")
 
-# Create repo
+# /create
 @app.on_message(filters.command("create") & not_banned)
 async def create_repo(_, msg: Message):
     if len(msg.command) < 2:
@@ -107,7 +117,7 @@ async def create_repo(_, msg: Message):
     else:
         await msg.reply("❌ Failed to create repository.")
 
-# Delete repo
+# /delete
 @app.on_message(filters.command("delete") & not_banned)
 async def delete_repo(_, msg: Message):
     if len(msg.command) < 2:
@@ -123,7 +133,7 @@ async def delete_repo(_, msg: Message):
     else:
         await msg.reply("❌ Failed to delete repository.")
 
-# Admin: Create for another user
+# /createas (admin)
 @app.on_message(filters.command("createas") & filters.user(ADMINS))
 async def create_as(_, msg: Message):
     if len(msg.command) < 3:
@@ -140,7 +150,7 @@ async def create_as(_, msg: Message):
     else:
         await msg.reply("❌ Failed to create repo.")
 
-# Admin: Ban user
+# /ban (admin)
 @app.on_message(filters.command("ban") & filters.user(ADMINS))
 async def ban_user(_, msg: Message):
     if len(msg.command) < 2:
@@ -150,7 +160,7 @@ async def ban_user(_, msg: Message):
     save_data()
     await msg.reply(f"🚫 Banned user `{user_id}`.")
 
-# Admin: Unban user
+# /unban (admin)
 @app.on_message(filters.command("unban") & filters.user(ADMINS))
 async def unban_user(_, msg: Message):
     if len(msg.command) < 2:
@@ -160,17 +170,17 @@ async def unban_user(_, msg: Message):
     save_data()
     await msg.reply(f"✅ Unbanned user `{user_id}`.")
 
-# Admin: List users
+# /users (admin)
 @app.on_message(filters.command("users") & filters.user(ADMINS))
 async def list_users(_, msg: Message):
     if not user_tokens:
         return await msg.reply("No users have set a token yet.")
-    text = "**👥 Users:**\n"
+    text = "**👥 Users with tokens:**\n"
     for uid in user_tokens:
         text += f"• `{uid}`\n"
     await msg.reply(text)
 
-# Upload file
+# File upload
 @app.on_message(filters.document & not_banned)
 async def upload_file(_, msg: Message):
     token = user_tokens.get(str(msg.from_user.id))
@@ -207,3 +217,4 @@ async def upload_file(_, msg: Message):
 # Start bot
 print("✅ SPILUX GITHUB BOT ONLINE")
 app.run()
+            
