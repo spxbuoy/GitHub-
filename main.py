@@ -254,4 +254,5 @@ async def unban_user(_, msg: Message):
     except:
         await msg.reply("❌ Invalid ID.")
 
+print("SPILUX GITHUB BOT ONLINE✅")
 app.run()
