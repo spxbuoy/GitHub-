@@ -45,15 +45,12 @@ async def start(_, msg: Message):
     await msg.reply(
         "**👋 Welcome to GitHub Manager Bot!**\n\n"
         "Commands:\n"
-        "• `/settoken <token>` – Link your GitHub\n"
-        "• `/repos` – List your repositories\n"
-        "• `/create <name>` – Create repo\n"
-        "• `/delete <name>` – Delete repo\n"
-        "• `/createas <user_id> <repo>` – Admin only\n"
-        "• `/ban <user_id>` – Admin only\n"
-        "• `/unban <user_id>` – Admin only\n"
-        "• `/users` – See all users\n"
-        "• Send any file to upload to repo\n",
+        Features:
+• Connect your GitHub account
+• Browse and manage repositories
+• Create and delete repositories
+• Upload files and manage repository contents
+• View issues and pull requests
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📂 Commands", callback_data="help")]
         ])
@@ -64,7 +61,7 @@ async def start(_, msg: Message):
 async def button_handler(_, cb):
     if cb.data == "help":
         await cb.message.edit(
-            "**📘 Commands Help**\n\n"
+            "**📘 𝐂𝐨𝐦𝐦𝐚𝐧𝐝𝐬 𝐇𝐞𝐥𝐩**\n\n"
             "`/settoken` - Link GitHub token\n"
             "`/repos` - List repos\n"
             "`/create` - Create repo\n"
@@ -72,6 +69,7 @@ async def button_handler(_, cb):
             "`/createas` - Admin create repo\n"
             "`/ban` / `/unban` - Admin only\n"
             "`/users` - Admin only",
+            bᎾᏆ bᎽ:@SpiluxX
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Back", callback_data="back")]
             ])
