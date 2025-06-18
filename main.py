@@ -1,6 +1,5 @@
 import os
 import json
-import base64
 import requests
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -47,7 +46,8 @@ async def show_commands(_, cb: CallbackQuery):
         [InlineKeyboardButton("🔀 Switch Token", callback_data="switch_token")],
         [InlineKeyboardButton("📚 My Repos", callback_data="list_repos")],
         [InlineKeyboardButton("📤 Upload File", callback_data="upload_file")],
-        [InlineKeyboardButton("🔎 Search User", callback_data="search_user")]
+        [InlineKeyboardButton("🔎 Search User", callback_data="search_user")],
+        [InlineKeyboardButton("🏓 Ping", callback_data="ping")]
     ]
     if cb.from_user.id in ADMINS:
         buttons.extend([
@@ -57,22 +57,78 @@ async def show_commands(_, cb: CallbackQuery):
         ])
     await cb.message.edit("📘 Choose a command:", reply_markup=InlineKeyboardMarkup(buttons))
 
-@app.on_message(filters.command("search") & not_banned)
-async def search_user(_, msg: Message):
-    if len(msg.command) < 2:
-        return await msg.reply("Usage: `/search username`")
-    username = msg.command[1]
-    res = requests.get(f"https://api.github.com/users/{username}/repos")
+@app.on_callback_query(filters.regex("^ping$"))
+async def ping(_, cb: CallbackQuery):
+    await cb.answer("✅ Pong!", show_alert=True)
+
+@app.on_callback_query(filters.regex("^set_token$"))
+async def ask_token(_, cb: CallbackQuery):
+    await cb.message.edit("✍️ Please send your GitHub token now...")
+    user_id = cb.from_user.id
+
+    @app.on_message(filters.private & filters.text & filters.user(user_id))
+    async def receive_token(_, msg: Message):
+        token = msg.text.strip()
+        headers = {"Authorization": f"token {token}"}
+        r = requests.get("https://api.github.com/user", headers=headers)
+
+        if r.status_code != 200:
+            await msg.reply("❌ Invalid token.")
+            return
+
+        username = r.json().get("login")
+        uid = str(user_id)
+        user_tokens.setdefault(uid, {})
+        user_tokens[uid][token] = {"username": username}
+        user_tokens[uid]["active"] = token
+        save_data()
+
+        await msg.reply(f"✅ Token saved for `{username}`")
+
+@app.on_callback_query(filters.regex("^switch_token$"))
+async def switch_token(_, cb: CallbackQuery):
+    uid = str(cb.from_user.id)
+    tokens = user_tokens.get(uid, {})
+    if not tokens:
+        return await cb.message.edit("❌ No tokens found.")
+    buttons = [InlineKeyboardButton(t[:6]+"...", callback_data=f"do_switch:{t}") for t in tokens if t != "active"]
+    await cb.message.edit("🔄 Choose a token:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
+
+@app.on_callback_query(filters.regex("^do_switch:"))
+async def do_switch(_, cb: CallbackQuery):
+    token = cb.data.split(":", 1)[1]
+    user_tokens[str(cb.from_user.id)]["active"] = token
+    save_data()
+    await cb.answer("✅ Switched!", show_alert=True)
+
+@app.on_callback_query(filters.regex("^list_repos$"))
+async def list_repos_cb(_, cb: CallbackQuery):
+    uid = str(cb.from_user.id)
+    token = user_tokens.get(uid, {}).get("active")
+    if not token:
+        return await cb.message.edit("❌ Set your token first.")
+    headers = {"Authorization": f"token {token}"}
+    res = requests.get("https://api.github.com/user/repos", headers=headers)
     if res.status_code != 200:
-        return await msg.reply("❌ User not found or error fetching repos.")
-
+        return await cb.message.edit("❌ Failed to get repos.")
     repos = res.json()
-    if not repos:
-        return await msg.reply("ℹ️ No public repositories found.")
+    username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
+    buttons = [InlineKeyboardButton(r["name"], url=f"https://github.com/{username}/{r['name']}/archive/refs/heads/main.zip") for r in repos]
+    await cb.message.edit("📦 Your Repos:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
 
-    buttons = [InlineKeyboardButton(repo['name'], url=f"https://github.com/{username}/{repo['name']}/archive/refs/heads/main.zip") for repo in repos]
-    reply_markup = InlineKeyboardMarkup.from_column(buttons)
-    await msg.reply(f"📁 Repositories by `{username}`:", reply_markup=reply_markup)
+@app.on_callback_query(filters.regex("^search_user$"))
+async def search_user_cb(_, cb: CallbackQuery):
+    await cb.message.edit("🔎 Send the username to search:")
+
+    @app.on_message(filters.private & filters.text & filters.user(cb.from_user.id))
+    async def receive_username(_, msg: Message):
+        username = msg.text.strip()
+        res = requests.get(f"https://api.github.com/users/{username}/repos")
+        if res.status_code != 200:
+            return await msg.reply("❌ User not found.")
+        repos = res.json()
+        buttons = [InlineKeyboardButton(repo['name'], url=f"https://github.com/{username}/{repo['name']}/archive/refs/heads/main.zip") for repo in repos]
+        await msg.reply(f"📁 Repositories by `{username}`:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
 
 print("✅ SPILUX GITHUB BOT ONLINE")
 app.run()
