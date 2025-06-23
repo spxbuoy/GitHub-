@@ -40,7 +40,7 @@ async def start(_, msg: Message):
         [InlineKeyboardButton("📂 Commands", callback_data="show_commands")]
     ]))
 
-@app.on_callback_query(filters.regex("^show_commands$"))
+@app.on_callback_query(filters.regex("show_commands"))
 async def show_commands(_, cb: CallbackQuery):
     buttons = [
         [InlineKeyboardButton("🔑 Set Token", callback_data="set_token")],
@@ -59,105 +59,107 @@ async def show_commands(_, cb: CallbackQuery):
         ])
     await cb.message.edit("📘 Choose a command:", reply_markup=InlineKeyboardMarkup(buttons))
 
-@app.on_callback_query(filters.regex("^ping$"))
+@app.on_callback_query(filters.regex("ping"))
 async def ping(_, cb: CallbackQuery):
-    await cb.answer("✅ Pong! Fast.", show_alert=True)
+    await cb.answer("✅ Pong!", show_alert=True)
 
-@app.on_callback_query(filters.regex("^set_token$"))
-async def ask_token(_, cb: CallbackQuery):
-    await cb.message.edit("✍️ Send your GitHub token now...")
+@app.on_callback_query(filters.regex("set_token"))
+async def set_token_cb(_, cb: CallbackQuery):
+    await cb.message.edit("✍️ Send your GitHub token:")
     user_states[cb.from_user.id] = "awaiting_token"
 
-@app.on_callback_query(filters.regex("^switch_token$"))
+@app.on_callback_query(filters.regex("switch_token"))
 async def switch_token(_, cb: CallbackQuery):
     uid = str(cb.from_user.id)
     tokens = user_tokens.get(uid, {})
-    if not tokens:
-        return await cb.message.edit("❌ No tokens found.")
+    if not tokens or len(tokens) <= 1:
+        return await cb.message.edit("❌ No alternate tokens to switch.")
     buttons = [InlineKeyboardButton(t[:6] + "...", callback_data=f"do_switch:{t}") for t in tokens if t != "active"]
     await cb.message.edit("🔄 Choose a token:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
 
 @app.on_callback_query(filters.regex("^do_switch:"))
 async def do_switch(_, cb: CallbackQuery):
     token = cb.data.split(":", 1)[1]
-    user_tokens[str(cb.from_user.id)]["active"] = token
-    save_data()
-    await cb.answer("✅ Switched!", show_alert=True)
+    uid = str(cb.from_user.id)
+    if token in user_tokens.get(uid, {}):
+        user_tokens[uid]["active"] = token
+        save_data()
+        await cb.answer("✅ Switched!", show_alert=True)
+    else:
+        await cb.answer("❌ Invalid token.", show_alert=True)
 
-@app.on_callback_query(filters.regex("^list_repos$"))
+@app.on_callback_query(filters.regex("list_repos"))
 async def list_repos_cb(_, cb: CallbackQuery):
     uid = str(cb.from_user.id)
     token = user_tokens.get(uid, {}).get("active")
     if not token:
-        return await cb.message.edit("❌ Set your token first.")
+        return await cb.message.edit("❌ You must set a GitHub token first.")
     headers = {"Authorization": f"token {token}"}
     res = requests.get("https://api.github.com/user/repos", headers=headers)
     if res.status_code != 200:
-        return await cb.message.edit("❌ Failed to get repos.")
+        return await cb.message.edit("❌ Failed to retrieve repos.")
     repos = res.json()
-    username = requests.get("https://api.github.com/user", headers=headers).json().get("login")
-    buttons = [InlineKeyboardButton(r["name"], url=r["html_url"] + "/archive/refs/heads/main.zip") for r in repos]
-    await cb.message.edit("📦 Your Repos:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
+    username = requests.get("https://api.github.com/user", headers=headers).json().get("login", "unknown")
+    buttons = [InlineKeyboardButton(repo["name"], url=f"https://github.com/{username}/{repo['name']}/archive/refs/heads/main.zip") for repo in repos]
+    await cb.message.edit("📦 Your Repositories:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
 
-@app.on_callback_query(filters.regex("^search_user$"))
-async def search_user_cb(_, cb: CallbackQuery):
-    await cb.message.edit("🔎 Send the username to search:")
-    user_states[cb.from_user.id] = "awaiting_username"
-
-@app.on_callback_query(filters.regex("^create_repo$"))
+@app.on_callback_query(filters.regex("create_repo"))
 async def create_repo_cb(_, cb: CallbackQuery):
-    await cb.message.edit("📦 Send the name of the repository to create:")
+    await cb.message.edit("🆕 Send the name of the new repository:")
     user_states[cb.from_user.id] = "awaiting_repo_name"
 
-@app.on_callback_query(filters.regex("^upload_file$"))
+@app.on_callback_query(filters.regex("search_user"))
+async def search_user_cb(_, cb: CallbackQuery):
+    await cb.message.edit("🔍 Send the GitHub username to search:")
+    user_states[cb.from_user.id] = "awaiting_search_username"
+
+@app.on_callback_query(filters.regex("upload_file"))
 async def upload_file_cb(_, cb: CallbackQuery):
-    await cb.message.edit("📤 Upload feature is coming soon or under development.")
-    # You can integrate file upload to GitHub repo using commits API later.
+    await cb.message.edit("📤 Upload feature is not yet implemented.")
 
 @app.on_message(filters.private & filters.text)
-async def handle_user_inputs(_, msg: Message):
-    user_id = msg.from_user.id
-    state = user_states.get(user_id)
+async def handle_text(_, msg: Message):
+    uid = msg.from_user.id
+    state = user_states.get(uid)
 
     if state == "awaiting_token":
         token = msg.text.strip()
         headers = {"Authorization": f"token {token}"}
-        r = requests.get("https://api.github.com/user", headers=headers)
-        if r.status_code != 200:
+        res = requests.get("https://api.github.com/user", headers=headers)
+        if res.status_code == 200:
+            username = res.json().get("login", "unknown")
+            user_tokens.setdefault(str(uid), {})
+            user_tokens[str(uid)][token] = {"username": username}
+            user_tokens[str(uid)]["active"] = token
+            save_data()
+            await msg.reply(f"✅ Token saved for `{username}`.")
+        else:
             await msg.reply("❌ Invalid token.")
-            return
-        username = r.json().get("login")
-        uid = str(user_id)
-        user_tokens.setdefault(uid, {})
-        user_tokens[uid][token] = {"username": username}
-        user_tokens[uid]["active"] = token
-        save_data()
-        await msg.reply(f"✅ Token saved for `{username}`")
-        user_states.pop(user_id, None)
+        user_states.pop(uid, None)
 
-    elif state == "awaiting_username":
+    elif state == "awaiting_repo_name":
+        repo_name = msg.text.strip()
+        token = user_tokens.get(str(uid), {}).get("active")
+        if not token:
+            return await msg.reply("❌ No active token.")
+        headers = {"Authorization": f"token {token}"}
+        res = requests.post("https://api.github.com/user/repos", headers=headers, json={"name": repo_name})
+        if res.status_code == 201:
+            await msg.reply(f"✅ Repository `{repo_name}` created!")
+        else:
+            await msg.reply("❌ Failed to create repository.")
+        user_states.pop(uid, None)
+
+    elif state == "awaiting_search_username":
         username = msg.text.strip()
         res = requests.get(f"https://api.github.com/users/{username}/repos")
         if res.status_code != 200:
             return await msg.reply("❌ User not found.")
         repos = res.json()
-        buttons = [InlineKeyboardButton(repo['name'], url=f"https://github.com/{username}/{repo['name']}/archive/refs/heads/main.zip") for repo in repos]
+        buttons = [InlineKeyboardButton(repo["name"], url=f"https://github.com/{username}/{repo['name']}/archive/refs/heads/main.zip") for repo in repos]
         await msg.reply(f"📁 Repositories by `{username}`:", reply_markup=InlineKeyboardMarkup.from_column(buttons))
-        user_states.pop(user_id, None)
-
-    elif state == "awaiting_repo_name":
-        repo_name = msg.text.strip()
-        token = user_tokens.get(str(user_id), {}).get("active")
-        if not token:
-            return await msg.reply("❌ No token found.")
-        headers = {"Authorization": f"token {token}"}
-        res = requests.post("https://api.github.com/user/repos", headers=headers, json={"name": repo_name})
-        if res.status_code == 201:
-            await msg.reply(f"✅ Repo `{repo_name}` created!")
-        else:
-            await msg.reply("❌ Failed to create repo.")
-        user_states.pop(user_id, None)
+        user_states.pop(uid, None)
 
 print("✅ SPILUX GITHUB BOT ONLINE")
 app.run()
-    
+        
